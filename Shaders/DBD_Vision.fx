@@ -5,7 +5,7 @@
 
     ────────────────────────────────────────────────────────────────
       作者    屠皇快雪 / Snow the Great
-      版本    v1.0
+      版本    v1.2
       许可    MIT（详见同目录 LICENSE）
       仓库    https://github.com/STGZh1nu/Chinese-DBD-reshade-fx-and-preset
     ────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ float Luma(float3 c)
 uniform float fExposure <
     ui_type = "slider"; ui_min = -4.0; ui_max = 4.0;
     ui_label = "曝光补偿";
-    ui_tooltip = "单位 EV。乌鸦巢穴这种过亮图先给 -0.2 试试。";
+    ui_tooltip = "对亮暗最直观的调整。";
 > = 0.0;
 
 uniform float fHighlightCompress <
@@ -93,7 +93,6 @@ uniform float fHighlightCompress <
 uniform float fShadowLift <
     ui_type = "slider"; ui_min = 0.0; ui_max = 1.0;
     ui_label = "暗部提亮";
-    ui_tooltip = "压完高光后暗部容易发死，这里捞回来一点。0.05~0.12 比较自然。";
 > = 0.05;
 
 uniform float fContrast <
@@ -104,7 +103,6 @@ uniform float fContrast <
 uniform float fGlobalSaturation <
     ui_type = "slider"; ui_min = 0.0; ui_max = 3.0;
     ui_label = "全局饱和度";
-    ui_tooltip = "总闸。颜色整体太重（多巴的紫粉）就先收到 0.85~0.9，再用槽3 精准补刀。";
 > = 1.00;
 
 uniform float fNeonTame <
@@ -147,41 +145,46 @@ uniform float fDehazeRadius <
 > = 4.0;
 
 //------------------------------------------------------------------------------
-// 颜色槽 1（默认：血迹 / 红光）
+// 颜色槽 1（你也想变得欧美吗）
 //------------------------------------------------------------------------------
 
 uniform float3 cSlot1Color <
     ui_type = "color";
     ui_label = "槽1 颜色";
-    ui_tooltip = "默认是血红色。";
+    ui_tooltip = "请选择想要强调或削弱的颜色";
 > = float3(1.0, 0.18, 0.18);
 
 uniform float fSlot1Tol <
     ui_type = "slider"; ui_min = 0.005; ui_max = 1.0;
     ui_label = "槽1 容差";
-    ui_tooltip = "0.10 精准，0.25 会连橙色一起抓。";
+    ui_tooltip = "是否选取近似的颜色";
 > = 0.12;
 
 uniform float fSlot1Str <
     ui_type = "slider"; ui_min = -3.0; ui_max = 4.0;
     ui_label = "槽1 强度";
-    ui_tooltip = "正 = 凸显（加饱和+提亮），负 = 削弱（去色+压暗），0 = 关。";
 > = 0.60;
 
 uniform float fSlot1Weight <
     ui_type = "slider"; ui_min = 0.0; ui_max = 1.0;
     ui_label = "槽1 权重";
-    ui_tooltip = "这个槽最多能影响到什么程度，1 = 全效。";
+    ui_tooltip = "这个槽的总开关";
 > = 1.0;
 
+uniform float fSlot1MinSat <
+    ui_type = "slider"; ui_min = 0.0; ui_max = 1.0;
+    ui_label = "槽1 最低饱和度";
+    ui_tooltip = "源于欧美，超越欧美。够豪。";
+> = 0.400000;
+
 //------------------------------------------------------------------------------
-// 颜色槽 2（默认：蓝色划痕 / 气场）
+// 颜色槽 2（想赢吗）
 //------------------------------------------------------------------------------
 
 uniform float3 cSlot2Color <
     ui_type = "color";
     ui_label = "槽2 颜色";
-    ui_tooltip = "默认是冷蓝色。想要青绿就往上挪。";
+    ui_tooltip = "建议把这个用于划痕颜色";
 > = float3(0.30, 0.60, 1.00);
 
 uniform float fSlot2Tol <
@@ -199,8 +202,14 @@ uniform float fSlot2Weight <
     ui_label = "槽2 权重";
 > = 1.0;
 
+uniform float fSlot2MinSat <
+    ui_type = "slider"; ui_min = 0.0; ui_max = 1.0;
+    ui_label = "槽2 最低饱和度";
+    
+> = 0.400000;
+
 //------------------------------------------------------------------------------
-// 颜色槽 3（默认：紫色，用于压制多巴的紫粉）
+// 颜色槽 3（建议用于压制不喜欢的地图色调）
 //------------------------------------------------------------------------------
 
 uniform float3 cSlot3Color <
@@ -225,15 +234,15 @@ uniform float fSlot3Weight <
     ui_label = "槽3 权重";
 > = 1.0;
 
+uniform float fSlot3MinSat <
+    ui_type = "slider"; ui_min = 0.0; ui_max = 1.0;
+    ui_label = "槽3 最低饱和度";
+    
+> = 0.400000;
+
 //------------------------------------------------------------------------------
 // 颜色槽公共
 //------------------------------------------------------------------------------
-
-uniform float fMinSat <
-    ui_type = "slider"; ui_min = 0.0; ui_max = 1.0;
-    ui_label = "最低饱和度";
-    ui_tooltip = "低于此值不参与（保护灰白墙、天空）。三个槽共用。";
-> = 0.10;
 
 uniform float fDimOthers <
     ui_type = "slider"; ui_min = 0.0; ui_max = 1.0;
@@ -341,7 +350,7 @@ float3 ApplyDehaze(float3 col, float2 uv)
 //------------------------------------------------------------------------------
 
 float3 ApplySlot(float3 col, float3 pickColor, float tol, float str, float weight,
-                 out float hitMask)
+                 float minSat, out float hitMask)
 {
     hitMask = 0.0;
     if (abs(str) < 0.001 || weight <= 0.001)
@@ -354,7 +363,7 @@ float3 ApplySlot(float3 col, float3 pickColor, float tol, float str, float weigh
     dh = min(dh, 1.0 - dh);
 
     float w = 1.0 - smoothstep(tol * 0.45, tol, dh);
-    w *= smoothstep(max(fMinSat * 0.6, 0.001), max(fMinSat, 0.002), hsv.y);
+    w *= smoothstep(max(minSat * 0.6, 0.001), max(minSat, 0.002), hsv.y);
     w *= smoothstep(0.02, 0.10, hsv.z);
     w = saturate(w * weight);
 
@@ -390,9 +399,9 @@ float3 ApplyAllSlots(float3 col)
     float m1, m2, m3;
     float3 c = col;
 
-    c = ApplySlot(c, cSlot1Color, fSlot1Tol, fSlot1Str, fSlot1Weight, m1);
-    c = ApplySlot(c, cSlot2Color, fSlot2Tol, fSlot2Str, fSlot2Weight, m2);
-    c = ApplySlot(c, cSlot3Color, fSlot3Tol, fSlot3Str, fSlot3Weight, m3);
+    c = ApplySlot(c, cSlot1Color, fSlot1Tol, fSlot1Str, fSlot1Weight, fSlot1MinSat, m1);
+    c = ApplySlot(c, cSlot2Color, fSlot2Tol, fSlot2Str, fSlot2Weight, fSlot2MinSat, m2);
+    c = ApplySlot(c, cSlot3Color, fSlot3Tol, fSlot3Str, fSlot3Weight, fSlot3MinSat, m3);
 
     if (fDimOthers > 0.001)
     {
@@ -488,7 +497,7 @@ technique DBD_Dehaze <
 
 technique DBD_ColorSlots <
     ui_label = "DBD 三色槽";
-    ui_tooltip = "三个颜色独立增强/削弱，可同时开。 · 屠皇快雪";
+    ui_tooltip = "三个颜色独立增强/削弱，而且比欧美的更有用不伤眼。 · 屠皇快雪";
 >
 {
     pass { VertexShader = PostProcessVS; PixelShader = PS_SlotsOnly; }
@@ -496,7 +505,7 @@ technique DBD_ColorSlots <
 
 technique DBD_Full <
     ui_label = "DBD 完整（去雾+三色+高光治理）";
-    ui_tooltip = "推荐。所有功能串起来，按地图微调即可。 · 屠皇快雪";
+    ui_tooltip = "集合所有功能，请自己多做几个预设以备不同地图。 · 屠皇快雪";
 >
 {
     pass { VertexShader = PostProcessVS; PixelShader = PS_Full; }
